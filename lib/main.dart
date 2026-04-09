@@ -6,14 +6,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://olkxkbzgiizzuuiwromm.supabase.co', // <-- ללא הרווח בסוף
+    url: 'https://olkxkbzgiizzuuiwromm.supabase.co',
     anonKey: 'sb_publishable_qMmV00FTXvpecYlmYESC1Q_0Yc4Jzjo',
   );
   runApp(const FamilyTaskManager());
 }
 
 enum TaskType { text, shopping }
-
 enum TaskVisibility { private, family }
 
 class TaskDescription {
@@ -104,7 +103,6 @@ class Task {
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
     if (value is int) {
-      // best-effort: allow ms since epoch
       return DateTime.fromMillisecondsSinceEpoch(value);
     }
     return null;
@@ -215,7 +213,6 @@ class _HomeScreenState extends State<HomeScreen> {
     'צופיה',
     'שרה',
     'בנימין',
-    'יהונתן',
   ];
 
   final _supabase = Supabase.instance.client;
@@ -1009,7 +1006,7 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context, {
     required BankTask bankTask,
   }) async {
-    String selectedMember = _members.first;
+    String selectedMember = currentUser ?? _members.first;
 
     await showDialog<void>(
       context: context,
@@ -1032,7 +1029,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         labelText: 'למי לשייך?',
                         border: OutlineInputBorder(),
                       ),
-                      items: _members
+                      items: (bankTask.visibility == TaskVisibility.private
+                              ? <String>[currentUser!]
+                              : _members)
                           .map(
                             (m) => DropdownMenuItem<String>(
                               value: m,
@@ -1040,10 +1039,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           )
                           .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setState(() => selectedMember = v);
-                      },
+                      onChanged: bankTask.visibility == TaskVisibility.private
+                          ? null
+                          : (v) {
+                              if (v == null) return;
+                              setState(() => selectedMember = v);
+                            },
                     ),
                   ],
                 ),
@@ -1153,6 +1154,29 @@ class _HomeScreenState extends State<HomeScreen> {
           final weeklyCounts = _weeklyFamilyCompletedCounts(visibleTasks);
           final trophyWinner = _trophyWinner(weeklyCounts);
 
+          // === לוגיקת לוח הבקרה האישי ===
+          final cutoff = _mostRecentSaturdayAt2359(DateTime.now());
+          int personalTotalThisWeek = 0;
+          int personalCompletedThisWeek = 0;
+
+          for (final t in visibleTasks) {
+            if (t.assignee == currentUser && t.visibility == TaskVisibility.private) {
+              if (t.isCompleted) {
+                if (t.completedAt != null && t.completedAt!.isAfter(cutoff)) {
+                  personalTotalThisWeek++;
+                  personalCompletedThisWeek++;
+                }
+              } else {
+                personalTotalThisWeek++;
+              }
+            }
+          }
+
+          double personalProgress = personalTotalThisWeek == 0 
+              ? 0 
+              : personalCompletedThisWeek / personalTotalThisWeek;
+          // ================================
+
           final byAssignee = <String, List<Task>>{
             for (final m in _members) m: <Task>[],
           };
@@ -1162,125 +1186,163 @@ class _HomeScreenState extends State<HomeScreen> {
             byAssignee[t.assignee]!.add(t);
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.only(top: 8, bottom: 24),
-            itemCount: _members.length,
-            itemBuilder: (context, index) {
-              final member = _members[index];
-              final tasks = (byAssignee[member] ?? const <Task>[]).toList()
-                ..sort((a, b) => a.title.compareTo(b.title));
-
-              final showCompleted = _showCompletedTab[member] ?? false;
-              final sessionCompleted =
-                  _sessionCompletedIds.putIfAbsent(member, () => <String>{});
-
-              final activeTasks = tasks.where((t) {
-                if (!t.isCompleted) return true;
-                return sessionCompleted.contains(t.id);
-              }).toList()
-                ..sort((a, b) {
-                  if (a.isCompleted != b.isCompleted) {
-                    return a.isCompleted ? 1 : -1;
-                  }
-                  return a.title.compareTo(b.title);
-                });
-
-              final completedTasks = tasks.where((t) {
-                if (!t.isCompleted) return false;
-                return !sessionCompleted.contains(t.id);
-              }).toList()
-                ..sort((a, b) {
-                  final ad = a.completedAt;
-                  final bd = b.completedAt;
-                  if (ad == null && bd == null) return a.title.compareTo(b.title);
-                  if (ad == null) return 1;
-                  if (bd == null) return -1;
-                  return bd.compareTo(ad);
-                });
-
-              return Card(
-                child: ExpansionTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    child: const Icon(Icons.person),
-                  ),
-                  title: Row(
+          return Column(
+            children: [
+              // === כרטיסיית מאזן אישי שבועי ===
+              Card(
+                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Text(
-                          member,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                      const Text(
+                        'מאזן אישי שבועי',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      if (trophyWinner == member) ...[
-                        const SizedBox(width: 8),
-                        const Text('🏆'),
-                      ],
+                      const SizedBox(height: 8),
+                      if (personalTotalThisWeek == 0)
+                        const Text('אין לך משימות אישיות השבוע. זמן לנוח! 🌴')
+                      else ...[
+                        Text('$personalCompletedThisWeek מתוך $personalTotalThisWeek הושלמו'),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: personalProgress,
+                          minHeight: 8,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ]
                     ],
                   ),
-                  subtitle: Text(
-                    'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע (משפחתי): ${weeklyCounts[member] ?? 0}',
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Wrap(
-                        spacing: 8,
+                ),
+              ),
+              // ==================================
+
+              // רשימת בני המשפחה
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(top: 8, bottom: 24),
+                  itemCount: _members.length,
+                  itemBuilder: (context, index) {
+                    final member = _members[index];
+                    final tasks = (byAssignee[member] ?? const <Task>[]).toList()
+                      ..sort((a, b) => a.title.compareTo(b.title));
+
+                    final showCompleted = _showCompletedTab[member] ?? false;
+                    final sessionCompleted =
+                        _sessionCompletedIds.putIfAbsent(member, () => <String>{});
+
+                    final activeTasks = tasks.where((t) {
+                      if (!t.isCompleted) return true;
+                      return sessionCompleted.contains(t.id);
+                    }).toList()
+                      ..sort((a, b) {
+                        if (a.isCompleted != b.isCompleted) {
+                          return a.isCompleted ? 1 : -1;
+                        }
+                        return a.title.compareTo(b.title);
+                      });
+
+                    final completedTasks = tasks.where((t) {
+                      if (!t.isCompleted) return false;
+                      return !sessionCompleted.contains(t.id);
+                    }).toList()
+                      ..sort((a, b) {
+                        final ad = a.completedAt;
+                        final bd = b.completedAt;
+                        if (ad == null && bd == null) return a.title.compareTo(b.title);
+                        if (ad == null) return 1;
+                        if (bd == null) return -1;
+                        return bd.compareTo(ad);
+                      });
+
+                    return Card(
+                      child: ExpansionTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          child: const Icon(Icons.person),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                member,
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            if (trophyWinner == member) ...[
+                              const SizedBox(width: 8),
+                              const Text('🏆'),
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע (משפחתי): ${weeklyCounts[member] ?? 0}',
+                        ),
                         children: [
-                          ChoiceChip(
-                            label: const Text('לביצוע'),
-                            selected: !showCompleted,
-                            onSelected: (v) {
-                              setState(() {
-                                _showCompletedTab[member] = false;
-                              });
-                            },
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Wrap(
+                              spacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('לביצוע'),
+                                  selected: !showCompleted,
+                                  onSelected: (v) {
+                                    setState(() {
+                                      _showCompletedTab[member] = false;
+                                    });
+                                  },
+                                ),
+                                ChoiceChip(
+                                  label: const Text('הושלמו'),
+                                  selected: showCompleted,
+                                  onSelected: (v) {
+                                    setState(() {
+                                      _showCompletedTab[member] = true;
+                                      _sessionCompletedIds[member]?.clear();
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                          ChoiceChip(
-                            label: const Text('הושלמו'),
-                            selected: showCompleted,
-                            onSelected: (v) {
-                              setState(() {
-                                _showCompletedTab[member] = true;
-                                _sessionCompletedIds[member]?.clear();
-                              });
-                            },
-                          ),
+                          if (!showCompleted)
+                            _TaskListSection(
+                              member: member,
+                              tasks: activeTasks,
+                              sessionCompletedIds: sessionCompleted,
+                              onMarkCompletedThisSession: (taskId) {
+                                setState(() => sessionCompleted.add(taskId));
+                              },
+                              onUnmarkThisSession: (taskId) {
+                                setState(() => sessionCompleted.remove(taskId));
+                              },
+                            )
+                          else
+                            _TaskListSection(
+                              member: member,
+                              tasks: completedTasks,
+                              sessionCompletedIds: sessionCompleted,
+                              onMarkCompletedThisSession: (taskId) {
+                                setState(() => sessionCompleted.add(taskId));
+                              },
+                              onUnmarkThisSession: (taskId) {
+                                setState(() => sessionCompleted.remove(taskId));
+                              },
+                            ),
+                          const SizedBox(height: 8),
                         ],
                       ),
-                    ),
-                    if (!showCompleted)
-                      _TaskListSection(
-                        member: member,
-                        tasks: activeTasks,
-                        sessionCompletedIds: sessionCompleted,
-                        onMarkCompletedThisSession: (taskId) {
-                          setState(() => sessionCompleted.add(taskId));
-                        },
-                        onUnmarkThisSession: (taskId) {
-                          setState(() => sessionCompleted.remove(taskId));
-                        },
-                      )
-                    else
-                      _TaskListSection(
-                        member: member,
-                        tasks: completedTasks,
-                        sessionCompletedIds: sessionCompleted,
-                        onMarkCompletedThisSession: (taskId) {
-                          setState(() => sessionCompleted.add(taskId));
-                        },
-                        onUnmarkThisSession: (taskId) {
-                          setState(() => sessionCompleted.remove(taskId));
-                        },
-                      ),
-                    const SizedBox(height: 8),
-                  ],
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ],
           );
         },
       ),
@@ -1365,7 +1427,7 @@ class _TaskTileState extends State<_TaskTile> {
     try {
       final payload = <String, dynamic>{
         'is_completed': newValue,
-        'completed_at': newValue ? DateTime.now().toIso8601String() : null,
+        'completed_at': newValue ? DateTime.now().toUtc().toIso8601String() : null,
       };
 
       await Supabase.instance.client
@@ -1409,7 +1471,7 @@ class _TaskTileState extends State<_TaskTile> {
           .update({
             'description': json,
             'is_completed': allDone,
-            'completed_at': allDone ? DateTime.now().toIso8601String() : null,
+            'completed_at': allDone ? DateTime.now().toUtc().toIso8601String() : null,
           })
           .eq('id', widget.task.id);
 
@@ -1452,10 +1514,24 @@ class _TaskTileState extends State<_TaskTile> {
           decoration: isCompletedVisual
               ? TextDecoration.lineThrough
               : TextDecoration.none,
+          color: isCompletedVisual ? Colors.grey : Colors.black,
         ),
       ),
-      subtitle: Text(
-        t.visibility == TaskVisibility.family ? 'משפחתי' : 'אישי',
+      subtitle: Row(
+        children: [
+          Icon(
+            t.visibility == TaskVisibility.family
+                ? Icons.group_outlined
+                : Icons.lock_outline,
+            size: 14,
+            color: Colors.grey,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            t.visibility == TaskVisibility.family ? 'משפחתי' : 'אישי',
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ],
       ),
       children: [
         if (!_expanded) const SizedBox.shrink(),
@@ -1488,9 +1564,13 @@ class _TaskDescriptionView extends StatelessWidget {
     }
 
     return switch (desc.type) {
-      TaskType.text => Text(
-          (desc.content ?? '').isEmpty ? 'אין תיאור' : desc.content!,
-          textDirection: TextDirection.rtl,
+      TaskType.text => Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            (desc.content ?? '').isEmpty ? 'אין תיאור' : desc.content!,
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(color: Colors.black87),
+          ),
         ),
       TaskType.shopping => Column(
           children: [
@@ -1510,7 +1590,14 @@ class _TaskDescriptionView extends StatelessWidget {
                       value: done,
                       onChanged: (v) => onToggleShoppingItem(i, v ?? false),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: Text(name),
+                      title: Text(
+                        name,
+                        style: TextStyle(
+                          decoration: done ? TextDecoration.lineThrough : null,
+                          color: done ? Colors.grey : Colors.black,
+                        ),
+                      ),
+                      dense: true,
                     );
                   },
                 ),
