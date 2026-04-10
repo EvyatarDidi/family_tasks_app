@@ -357,10 +357,35 @@ class _HomeScreenState extends State<HomeScreen> {
         String selectedMember = currentUser ?? _members.first;
         TaskVisibility visibility = TaskVisibility.private;
         TaskType type = TaskType.text;
-        final shoppingControllers = <TextEditingController>[TextEditingController()];
+        
+        final shoppingControllers = <TextEditingController>[];
+        final newItemController = TextEditingController();
 
         String? titleError;
         String? descError;
+
+        void processPastedItems(StateSetter setModalState) {
+          final text = newItemController.text;
+          if (text.trim().isEmpty) return;
+          final lines = text.split('\n');
+          
+          setModalState(() {
+            for (final line in lines) {
+              final trimmed = line.trim();
+              if (trimmed.isEmpty) continue;
+              
+              final exists = shoppingControllers.any(
+                (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase()
+              );
+              
+              if (!exists) {
+                shoppingControllers.add(TextEditingController(text: trimmed));
+              }
+            }
+            newItemController.clear();
+            descError = null;
+          });
+        }
 
         Map<String, dynamic> buildDescriptionJson() {
           return switch (type) {
@@ -378,6 +403,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         bool validate(StateSetter setModalState) {
+          if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
+            processPastedItems(setModalState);
+          }
+
           final title = titleController.text.trim();
           final descText = textDescriptionController.text.trim();
           final shoppingItems = shoppingControllers
@@ -416,242 +445,258 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: 8,
                     bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'הוספת משימה חדשה',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                        textAlign: TextAlign.start,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: titleController,
-                        textDirection: TextDirection.rtl,
-                        decoration: InputDecoration(
-                          labelText: 'כותרת משימה',
-                          hintText: 'לדוגמה: להוציא את הזבל',
-                          prefixIcon: const Icon(Icons.task_alt_outlined),
-                          border: const OutlineInputBorder(),
-                          errorText: titleError,
-                        ),
-                        autofocus: true,
-                        onChanged: (_) {
-                          if (titleError == null) return;
-                          setModalState(() => titleError = null);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedMember,
-                        decoration: const InputDecoration(
-                          labelText: 'למי לשייך?',
-                          prefixIcon: Icon(Icons.person_outline),
-                          border: OutlineInputBorder(),
-                        ),
-                        items: (visibility == TaskVisibility.private
-                                ? <String>[currentUser!]
-                                : _members)
-                            .map(
-                              (m) => DropdownMenuItem<String>(
-                                value: m,
-                                child: Text(m, textDirection: TextDirection.rtl),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'הוספת משימה חדשה',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
-                            )
-                            .toList(),
-                        onChanged: visibility == TaskVisibility.private
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setModalState(() => selectedMember = value);
-                              },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<TaskVisibility>(
-                        initialValue: visibility,
-                        decoration: const InputDecoration(
-                          labelText: 'חשיפה',
-                          prefixIcon: Icon(Icons.visibility_outlined),
-                          border: OutlineInputBorder(),
+                          textAlign: TextAlign.start,
                         ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: TaskVisibility.family,
-                            child: Text('משפחתי'),
-                          ),
-                          DropdownMenuItem(
-                            value: TaskVisibility.private,
-                            child: Text('אישי'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setModalState(() {
-                            visibility = value;
-                            if (visibility == TaskVisibility.private) {
-                              selectedMember = currentUser!;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      SegmentedButton<TaskType>(
-                        segments: const [
-                          ButtonSegment(
-                            value: TaskType.text,
-                            label: Text('טקסט חופשי'),
-                            icon: Icon(Icons.text_snippet_outlined),
-                          ),
-                          ButtonSegment(
-                            value: TaskType.shopping,
-                            label: Text('רשימת קניות'),
-                            icon: Icon(Icons.shopping_cart_outlined),
-                          ),
-                        ],
-                        selected: {type},
-                        onSelectionChanged: (s) {
-                          setModalState(() {
-                            type = s.first;
-                            descError = null;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      if (type == TaskType.text)
+                        const SizedBox(height: 12),
                         TextField(
-                          controller: textDescriptionController,
+                          controller: titleController,
                           textDirection: TextDirection.rtl,
-                          minLines: 3,
-                          maxLines: 6,
                           decoration: InputDecoration(
-                            labelText: 'תיאור',
-                            hintText: 'מה צריך לעשות?',
-                            prefixIcon: const Icon(Icons.description_outlined),
+                            labelText: 'כותרת משימה',
+                            hintText: 'לדוגמה: להוציא את הזבל',
+                            prefixIcon: const Icon(Icons.task_alt_outlined),
                             border: const OutlineInputBorder(),
-                            errorText: descError,
+                            errorText: titleError,
                           ),
+                          autofocus: true,
                           onChanged: (_) {
-                            if (descError == null) return;
-                            setModalState(() => descError = null);
+                            if (titleError == null) return;
+                            setModalState(() => titleError = null);
                           },
-                        )
-                      else
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            InputDecorator(
-                              decoration: InputDecoration(
-                                labelText: 'פריטים',
-                                border: const OutlineInputBorder(),
-                                errorText: descError,
-                              ),
-                              child: Column(
-                                children: [
-                                  for (var i = 0; i < shoppingControllers.length; i++)
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: i == shoppingControllers.length - 1 ? 0 : 8),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: TextField(
-                                              controller: shoppingControllers[i],
-                                              textDirection: TextDirection.rtl,
-                                              decoration: InputDecoration(
-                                                hintText: 'פריט #${i + 1}',
-                                                isDense: true,
-                                                border: const OutlineInputBorder(),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedMember,
+                          decoration: const InputDecoration(
+                            labelText: 'למי לשייך?',
+                            prefixIcon: Icon(Icons.person_outline),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: (visibility == TaskVisibility.private
+                                  ? <String>[currentUser!]
+                                  : _members)
+                              .map(
+                                (m) => DropdownMenuItem<String>(
+                                  value: m,
+                                  child: Text(m, textDirection: TextDirection.rtl),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: visibility == TaskVisibility.private
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  setModalState(() => selectedMember = value);
+                                },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<TaskVisibility>(
+                          initialValue: visibility,
+                          decoration: const InputDecoration(
+                            labelText: 'חשיפה',
+                            prefixIcon: Icon(Icons.visibility_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: TaskVisibility.family,
+                              child: Text('משפחתי'),
+                            ),
+                            DropdownMenuItem(
+                              value: TaskVisibility.private,
+                              child: Text('אישי'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setModalState(() {
+                              visibility = value;
+                              if (visibility == TaskVisibility.private) {
+                                selectedMember = currentUser!;
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        SegmentedButton<TaskType>(
+                          segments: const [
+                            ButtonSegment(
+                              value: TaskType.text,
+                              label: Text('טקסט חופשי'),
+                              icon: Icon(Icons.text_snippet_outlined),
+                            ),
+                            ButtonSegment(
+                              value: TaskType.shopping,
+                              label: Text('רשימת קניות'),
+                              icon: Icon(Icons.shopping_cart_outlined),
+                            ),
+                          ],
+                          selected: {type},
+                          onSelectionChanged: (s) {
+                            setModalState(() {
+                              type = s.first;
+                              descError = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        if (type == TaskType.text)
+                          TextField(
+                            controller: textDescriptionController,
+                            textDirection: TextDirection.rtl,
+                            minLines: 3,
+                            maxLines: 6,
+                            decoration: InputDecoration(
+                              labelText: 'תיאור',
+                              hintText: 'מה צריך לעשות?',
+                              prefixIcon: const Icon(Icons.description_outlined),
+                              border: const OutlineInputBorder(),
+                              errorText: descError,
+                            ),
+                            onChanged: (_) {
+                              if (descError == null) return;
+                              setModalState(() => descError = null);
+                            },
+                          )
+                        else
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: 'פריטים',
+                                  border: const OutlineInputBorder(),
+                                  errorText: descError,
+                                ),
+                                child: Column(
+                                  children: [
+                                    for (var i = 0; i < shoppingControllers.length; i++)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: shoppingControllers[i],
+                                                textDirection: TextDirection.rtl,
+                                                decoration: const InputDecoration(
+                                                  isDense: true,
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                                onChanged: (_) {
+                                                  if (descError == null) return;
+                                                  setModalState(() => descError = null);
+                                                },
                                               ),
-                                              onChanged: (_) {
-                                                if (descError == null) return;
-                                                setModalState(() => descError = null);
-                                              },
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          IconButton(
-                                            onPressed: shoppingControllers.length <= 1
-                                                ? null
-                                                : () {
-                                                    setModalState(() {
-                                                      shoppingControllers.removeAt(i);
-                                                    });
-                                                  },
-                                            icon: const Icon(Icons.remove_circle_outline),
-                                            color: Theme.of(context).colorScheme.error,
-                                          ),
-                                        ],
+                                            const SizedBox(width: 8),
+                                            IconButton(
+                                              onPressed: () {
+                                                setModalState(() {
+                                                  shoppingControllers.removeAt(i);
+                                                });
+                                              },
+                                              icon: const Icon(Icons.remove_circle_outline),
+                                              color: Theme.of(context).colorScheme.error,
+                                            ),
+                                          ],
+                                        ),
                                       ),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: newItemController,
+                                            textDirection: TextDirection.rtl,
+                                            minLines: 1,
+                                            maxLines: 5,
+                                            keyboardType: TextInputType.multiline,
+                                            decoration: const InputDecoration(
+                                              hintText: 'הוסף פריט או הדבק רשימה...',
+                                              isDense: true,
+                                              border: OutlineInputBorder(),
+                                            ),
+                                            onChanged: (_) {
+                                              if (descError == null) return;
+                                              setModalState(() => descError = null);
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          onPressed: () => processPastedItems(setModalState),
+                                          icon: const Icon(Icons.add_circle),
+                                          color: Theme.of(context).colorScheme.primary,
+                                          iconSize: 32,
+                                        ),
+                                      ],
                                     ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton.icon(
-                                      onPressed: () {
-                                        setModalState(() {
-                                          shoppingControllers.add(TextEditingController());
-                                        });
-                                      },
-                                      icon: const Icon(Icons.add),
-                                      label: const Text('הוסף פריט'),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(sheetContext),
+                                child: const Text('ביטול'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: () async {
+                                  if (!validate(setModalState)) return;
+  
+                                  final title = titleController.text.trim();
+                                  final description = buildDescriptionJson();
+  
+                                  try {
+                                    await _supabase.from('tasks').insert({
+                                      'title': title,
+                                      'assignee': selectedMember,
+                                      'visibility': visibility == TaskVisibility.family
+                                          ? 'family'
+                                          : 'private',
+                                      'description': description,
+                                      'is_completed': false,
+                                      'completed_at': null,
+                                    });
+                                  } catch (e) {
+                                    if (!sheetContext.mounted) return;
+                                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                      SnackBar(
+                                        content: Text('שגיאה בהוספת משימה: $e'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+  
+                                  if (!sheetContext.mounted) return;
+                                  Navigator.pop(sheetContext);
+                                },
+                                child: const Text('הוסף משימה'),
                               ),
                             ),
                           ],
                         ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(sheetContext),
-                              child: const Text('ביטול'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: () async {
-                                if (!validate(setModalState)) return;
-
-                                final title = titleController.text.trim();
-                                final description = buildDescriptionJson();
-
-                                try {
-                                  await _supabase.from('tasks').insert({
-                                    'title': title,
-                                    'assignee': selectedMember,
-                                    'visibility': visibility == TaskVisibility.family
-                                        ? 'family'
-                                        : 'private',
-                                    'description': description,
-                                    'is_completed': false,
-                                    'completed_at': null,
-                                  });
-                                } catch (e) {
-                                  if (!sheetContext.mounted) return;
-                                  ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                    SnackBar(
-                                      content: Text('שגיאה בהוספת משימה: $e'),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                if (!sheetContext.mounted) return;
-                                Navigator.pop(sheetContext);
-                              },
-                              child: const Text('הוסף משימה'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -771,9 +816,35 @@ class _HomeScreenState extends State<HomeScreen> {
     final textDescriptionController = TextEditingController();
     TaskVisibility visibility = TaskVisibility.family;
     TaskType type = TaskType.text;
-    final shoppingControllers = <TextEditingController>[TextEditingController()];
+    
+    final shoppingControllers = <TextEditingController>[];
+    final newItemController = TextEditingController();
+    
     String? titleError;
     String? descError;
+
+    void processPastedItems(StateSetter setModalState) {
+      final text = newItemController.text;
+      if (text.trim().isEmpty) return;
+      final lines = text.split('\n');
+      
+      setModalState(() {
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) continue;
+          
+          final exists = shoppingControllers.any(
+            (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase()
+          );
+          
+          if (!exists) {
+            shoppingControllers.add(TextEditingController(text: trimmed));
+          }
+        }
+        newItemController.clear();
+        descError = null;
+      });
+    }
 
     Map<String, dynamic> buildDescriptionJson() {
       return switch (type) {
@@ -791,6 +862,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     bool validate(StateSetter setModalState) {
+      if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
+        processPastedItems(setModalState);
+      }
+
       final title = titleController.text.trim();
       final descText = textDescriptionController.text.trim();
       final shoppingItems = shoppingControllers
@@ -913,17 +988,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               for (var i = 0; i < shoppingControllers.length; i++)
                                 Padding(
-                                  padding: EdgeInsets.only(bottom: i == shoppingControllers.length - 1 ? 0 : 8),
+                                  padding: const EdgeInsets.only(bottom: 8),
                                   child: Row(
                                     children: [
                                       Expanded(
                                         child: TextField(
                                           controller: shoppingControllers[i],
                                           textDirection: TextDirection.rtl,
-                                          decoration: InputDecoration(
-                                            hintText: 'פריט #${i + 1}',
+                                          decoration: const InputDecoration(
                                             isDense: true,
-                                            border: const OutlineInputBorder(),
+                                            border: OutlineInputBorder(),
                                           ),
                                           onChanged: (_) {
                                             if (descError == null) return;
@@ -933,32 +1007,46 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       IconButton(
-                                        onPressed: shoppingControllers.length <= 1
-                                            ? null
-                                            : () {
-                                                setModalState(() {
-                                                  shoppingControllers.removeAt(i);
-                                                });
-                                              },
+                                        onPressed: () {
+                                          setModalState(() {
+                                            shoppingControllers.removeAt(i);
+                                          });
+                                        },
                                         icon: const Icon(Icons.remove_circle_outline),
                                         color: Theme.of(context).colorScheme.error,
                                       ),
                                     ],
                                   ),
                                 ),
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    setModalState(() {
-                                      shoppingControllers
-                                          .add(TextEditingController());
-                                    });
-                                  },
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('הוסף פריט'),
-                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: newItemController,
+                                      textDirection: TextDirection.rtl,
+                                      minLines: 1,
+                                      maxLines: 5,
+                                      keyboardType: TextInputType.multiline,
+                                      decoration: const InputDecoration(
+                                        hintText: 'הוסף פריט או הדבק רשימה...',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      onChanged: (_) {
+                                        if (descError == null) return;
+                                        setModalState(() => descError = null);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: () => processPastedItems(setModalState),
+                                    icon: const Icon(Icons.add_circle),
+                                    color: Theme.of(context).colorScheme.primary,
+                                    iconSize: 32,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -1017,36 +1105,38 @@ class _HomeScreenState extends State<HomeScreen> {
               textDirection: TextDirection.rtl,
               child: AlertDialog(
                 title: const Text('שייך משימה לבן משפחה'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('משימה: ${bankTask.title}'),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedMember,
-                      decoration: const InputDecoration(
-                        labelText: 'למי לשייך?',
-                        border: OutlineInputBorder(),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('משימה: ${bankTask.title}'),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedMember,
+                        decoration: const InputDecoration(
+                          labelText: 'למי לשייך?',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: (bankTask.visibility == TaskVisibility.private
+                                ? <String>[currentUser!]
+                                : _members)
+                            .map(
+                              (m) => DropdownMenuItem<String>(
+                                value: m,
+                                child: Text(m),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: bankTask.visibility == TaskVisibility.private
+                            ? null
+                            : (v) {
+                                if (v == null) return;
+                                setState(() => selectedMember = v);
+                              },
                       ),
-                      items: (bankTask.visibility == TaskVisibility.private
-                              ? <String>[currentUser!]
-                              : _members)
-                          .map(
-                            (m) => DropdownMenuItem<String>(
-                              value: m,
-                              child: Text(m),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: bankTask.visibility == TaskVisibility.private
-                          ? null
-                          : (v) {
-                              if (v == null) return;
-                              setState(() => selectedMember = v);
-                            },
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 actions: [
                   TextButton(
@@ -1281,7 +1371,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         subtitle: Text(
-                          'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע (משפחתי): ${weeklyCounts[member] ?? 0}',
+                          'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע : ${weeklyCounts[member] ?? 0}',
                         ),
                         children: [
                           Padding(
@@ -1449,6 +1539,48 @@ class _TaskTileState extends State<_TaskTile> {
       if (mounted) setState(() => _saving = false);
     }
   }
+  
+  // פונקציית המחיקה החדשה (Hard Delete)
+  Future<void> _deleteTask() async {
+    try {
+      await Supabase.instance.client
+          .from('tasks')
+          .delete()
+          .eq('id', widget.task.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('שגיאה במחיקת המשימה: $e')),
+      );
+    }
+  }
+
+  // חלון האישור לפני מחיקה
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('מחיקת משימה'),
+          content: const Text('האם אתה בטוח שברצונך למחוק משימה זו לצמיתות? לא ניתן לשחזר פעולה זו.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('ביטול'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext); // סגירת חלון האישור
+                _deleteTask(); // קריאה למחיקה בפועל
+              },
+              child: const Text('מחק', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _toggleShoppingItem(int index, bool newValue) async {
     final desc = widget.task.description;
@@ -1527,9 +1659,19 @@ class _TaskTileState extends State<_TaskTile> {
             color: Colors.grey,
           ),
           const SizedBox(width: 4),
-          Text(
-            t.visibility == TaskVisibility.family ? 'משפחתי' : 'אישי',
-            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          // עטפנו את הטקסט ב-Expanded כדי לדחוף את הפח לצד שמאל
+          Expanded(
+            child: Text(
+              t.visibility == TaskVisibility.family ? 'משפחתי' : 'אישי',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+          // כפתור המחיקה החדש
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: _showDeleteConfirmation,
           ),
         ],
       ),
