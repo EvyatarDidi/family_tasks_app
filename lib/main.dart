@@ -484,7 +484,49 @@ class _HomeScreenState extends State<HomeScreen> {
                                 leading: const Icon(Icons.inventory_2_outlined),
                                 title: Text(t.title),
                                 subtitle: Text('חשיפה: $visLabel'),
-                                trailing: const Icon(Icons.chevron_left),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () async {
+                                        // דיאלוג אישור מחיקה מהבנק
+                                        final confirm = await showDialog<bool>(
+                                          context: sheetContext,
+                                          builder: (dialogContext) => Directionality(
+                                            textDirection: TextDirection.rtl,
+                                            child: AlertDialog(
+                                              title: const Text('מחיקת משימה מהבנק'),
+                                              content: const Text('האם אתה בטוח שברצונך למחוק משימה זו מבנק המשימות לצמיתות?'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(dialogContext, false),
+                                                  child: const Text('ביטול'),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(dialogContext, true),
+                                                  child: const Text('מחק', style: TextStyle(color: Colors.red)),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+
+                                        if (confirm == true) {
+                                          try {
+                                            await _supabase.from('task_bank').delete().eq('id', t.id);
+                                          } catch (e) {
+                                            if (!sheetContext.mounted) return;
+                                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                              SnackBar(content: Text('שגיאה במחיקת המשימה מהבנק: $e')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    const Icon(Icons.chevron_left),
+                                  ],
+                                ),
                                 onTap: () async {
                                   await _assignBankTaskToMember(
                                     sheetContext,
