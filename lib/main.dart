@@ -352,356 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
       showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (sheetContext) {
-        final titleController = TextEditingController();
-        final textDescriptionController = TextEditingController();
-        String selectedMember = currentUser ?? _members.first;
-        TaskVisibility visibility = TaskVisibility.private;
-        TaskType type = TaskType.text;
-        
-        final shoppingControllers = <TextEditingController>[];
-        final newItemController = TextEditingController();
-
-        String? titleError;
-        String? descError;
-
-        void processPastedItems(StateSetter setModalState) {
-          final text = newItemController.text;
-          if (text.trim().isEmpty) return;
-          final lines = text.split('\n');
-          
-          setModalState(() {
-            for (final line in lines) {
-              final trimmed = line.trim();
-              if (trimmed.isEmpty) continue;
-              
-              final exists = shoppingControllers.any(
-                (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase()
-              );
-              
-              if (!exists) {
-                shoppingControllers.add(TextEditingController(text: trimmed));
-              }
-            }
-            newItemController.clear();
-            descError = null;
-          });
-        }
-
-        Map<String, dynamic> buildDescriptionJson() {
-          return switch (type) {
-            TaskType.text => TaskDescription.text(
-                textDescriptionController.text.trim(),
-              ).toJson(),
-            TaskType.shopping => TaskDescription.shopping(
-                shoppingControllers
-                    .map((c) => c.text.trim())
-                    .where((t) => t.isNotEmpty)
-                    .map((name) => <String, dynamic>{'name': name, 'done': false})
-                    .toList(),
-              ).toJson(),
-          };
-        }
-
-        bool validate(StateSetter setModalState) {
-          if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
-            processPastedItems(setModalState);
-          }
-
-          final title = titleController.text.trim();
-          final descText = textDescriptionController.text.trim();
-          final shoppingItems = shoppingControllers
-              .map((c) => c.text.trim())
-              .where((t) => t.isNotEmpty)
-              .toList();
-
-          String? newTitleError;
-          String? newDescError;
-
-          if (title.isEmpty) newTitleError = 'נא להזין כותרת למשימה';
-
-          if (type == TaskType.text) {
-            if (descText.isEmpty) newDescError = 'נא להזין תיאור';
-          } else {
-            if (shoppingItems.isEmpty) newDescError = 'נא להוסיף לפחות פריט אחד';
-          }
-
-          setModalState(() {
-            titleError = newTitleError;
-            descError = newDescError;
-          });
-
-          return newTitleError == null && newDescError == null;
-        }
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Directionality(
-              textDirection: TextDirection.rtl,
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 8,
-                    bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'הוספת משימה חדשה',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                          textAlign: TextAlign.start,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: titleController,
-                          textDirection: TextDirection.rtl,
-                          decoration: InputDecoration(
-                            labelText: 'כותרת משימה',
-                            hintText: 'לדוגמה: להוציא את הזבל',
-                            prefixIcon: const Icon(Icons.task_alt_outlined),
-                            border: const OutlineInputBorder(),
-                            errorText: titleError,
-                          ),
-                          autofocus: true,
-                          onChanged: (_) {
-                            if (titleError == null) return;
-                            setModalState(() => titleError = null);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedMember,
-                          decoration: const InputDecoration(
-                            labelText: 'למי לשייך?',
-                            prefixIcon: Icon(Icons.person_outline),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: (visibility == TaskVisibility.private
-                                  ? <String>[currentUser!]
-                                  : _members)
-                              .map(
-                                (m) => DropdownMenuItem<String>(
-                                  value: m,
-                                  child: Text(m, textDirection: TextDirection.rtl),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: visibility == TaskVisibility.private
-                              ? null
-                              : (value) {
-                                  if (value == null) return;
-                                  setModalState(() => selectedMember = value);
-                                },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<TaskVisibility>(
-                          initialValue: visibility,
-                          decoration: const InputDecoration(
-                            labelText: 'חשיפה',
-                            prefixIcon: Icon(Icons.visibility_outlined),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: TaskVisibility.family,
-                              child: Text('משפחתי'),
-                            ),
-                            DropdownMenuItem(
-                              value: TaskVisibility.private,
-                              child: Text('אישי'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setModalState(() {
-                              visibility = value;
-                              if (visibility == TaskVisibility.private) {
-                                selectedMember = currentUser!;
-                              }
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        SegmentedButton<TaskType>(
-                          segments: const [
-                            ButtonSegment(
-                              value: TaskType.text,
-                              label: Text('טקסט חופשי'),
-                              icon: Icon(Icons.text_snippet_outlined),
-                            ),
-                            ButtonSegment(
-                              value: TaskType.shopping,
-                              label: Text('רשימת קניות'),
-                              icon: Icon(Icons.shopping_cart_outlined),
-                            ),
-                          ],
-                          selected: {type},
-                          onSelectionChanged: (s) {
-                            setModalState(() {
-                              type = s.first;
-                              descError = null;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        if (type == TaskType.text)
-                          TextField(
-                            controller: textDescriptionController,
-                            textDirection: TextDirection.rtl,
-                            minLines: 3,
-                            maxLines: 6,
-                            decoration: InputDecoration(
-                              labelText: 'תיאור',
-                              hintText: 'מה צריך לעשות?',
-                              prefixIcon: const Icon(Icons.description_outlined),
-                              border: const OutlineInputBorder(),
-                              errorText: descError,
-                            ),
-                            onChanged: (_) {
-                              if (descError == null) return;
-                              setModalState(() => descError = null);
-                            },
-                          )
-                        else
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              InputDecorator(
-                                decoration: InputDecoration(
-                                  labelText: 'פריטים',
-                                  border: const OutlineInputBorder(),
-                                  errorText: descError,
-                                ),
-                                child: Column(
-                                  children: [
-                                    for (var i = 0; i < shoppingControllers.length; i++)
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: TextField(
-                                                controller: shoppingControllers[i],
-                                                textDirection: TextDirection.rtl,
-                                                decoration: const InputDecoration(
-                                                  isDense: true,
-                                                  border: OutlineInputBorder(),
-                                                ),
-                                                onChanged: (_) {
-                                                  if (descError == null) return;
-                                                  setModalState(() => descError = null);
-                                                },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            IconButton(
-                                              onPressed: () {
-                                                setModalState(() {
-                                                  shoppingControllers.removeAt(i);
-                                                });
-                                              },
-                                              icon: const Icon(Icons.remove_circle_outline),
-                                              color: Theme.of(context).colorScheme.error,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            controller: newItemController,
-                                            textDirection: TextDirection.rtl,
-                                            minLines: 1,
-                                            maxLines: 5,
-                                            keyboardType: TextInputType.multiline,
-                                            decoration: const InputDecoration(
-                                              hintText: 'הוסף פריט או הדבק רשימה...',
-                                              isDense: true,
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            onChanged: (_) {
-                                              if (descError == null) return;
-                                              setModalState(() => descError = null);
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          onPressed: () => processPastedItems(setModalState),
-                                          icon: const Icon(Icons.add_circle),
-                                          color: Theme.of(context).colorScheme.primary,
-                                          iconSize: 32,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(sheetContext),
-                                child: const Text('ביטול'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () async {
-                                  if (!validate(setModalState)) return;
-  
-                                  final title = titleController.text.trim();
-                                  final description = buildDescriptionJson();
-  
-                                  try {
-                                    await _supabase.from('tasks').insert({
-                                      'title': title,
-                                      'assignee': selectedMember,
-                                      'visibility': visibility == TaskVisibility.family
-                                          ? 'family'
-                                          : 'private',
-                                      'description': description,
-                                      'is_completed': false,
-                                      'completed_at': null,
-                                    });
-                                  } catch (e) {
-                                    if (!sheetContext.mounted) return;
-                                    ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                      SnackBar(
-                                        content: Text('שגיאה בהוספת משימה: $e'),
-                                      ),
-                                    );
-                                    return;
-                                  }
-  
-                                  if (!sheetContext.mounted) return;
-                                  Navigator.pop(sheetContext);
-                                },
-                                child: const Text('הוסף משימה'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+        return _AddTaskSheet(
+          currentUser: currentUser!,
+          members: _members,
         );
       },
     );
@@ -716,93 +369,96 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (sheetContext) {
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 8,
-                bottom: 16 + MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'בנק משימות',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+          // קיבוע הגובה ל-90% כדי שהחלון לא יקפוץ
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.9,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: 16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'בנק משימות',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
                         ),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: () async {
-                          await _openAddBankTaskDialog(sheetContext);
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('הוסף'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  StreamBuilder<List<BankTask>>(
-                    stream: _taskBankStream(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Text('שגיאה בטעינת בנק משימות: ${snapshot.error}'),
-                        );
-                      }
-                      if (!snapshot.hasData) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-
-                      final items = snapshot.data ?? const <BankTask>[];
-                      if (items.isEmpty) {
-                        return const ListTile(
-                          leading: Icon(Icons.account_balance_outlined),
-                          title: Text('אין משימות בבנק עדיין'),
-                        );
-                      }
-
-                      return ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 420),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: items.length,
-                          separatorBuilder: (context, index) =>
-                              const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final t = items[i];
-                            final visLabel = t.visibility == TaskVisibility.family
-                                ? 'משפחתי'
-                                : 'אישי';
-                            return ListTile(
-                              leading: const Icon(Icons.inventory_2_outlined),
-                              title: Text(t.title),
-                              subtitle: Text('חשיפה: $visLabel'),
-                              trailing: const Icon(Icons.chevron_left),
-                              onTap: () async {
-                                await _assignBankTaskToMember(
-                                  sheetContext,
-                                  bankTask: t,
-                                );
-                              },
-                            );
+                        FilledButton.tonalIcon(
+                          onPressed: () async {
+                            await _openAddBankTaskDialog(sheetContext);
                           },
+                          icon: const Icon(Icons.add),
+                          label: const Text('הוסף'),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<BankTask>>(
+                      stream: _taskBankStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Text('שגיאה בטעינת בנק משימות: ${snapshot.error}'),
+                          );
+                        }
+                        if (!snapshot.hasData) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+  
+                        final items = snapshot.data ?? const <BankTask>[];
+                        if (items.isEmpty) {
+                          return const ListTile(
+                            leading: Icon(Icons.account_balance_outlined),
+                            title: Text('אין משימות בבנק עדיין'),
+                          );
+                        }
+  
+                        return Expanded(
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: items.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final t = items[i];
+                              final visLabel = t.visibility == TaskVisibility.family
+                                  ? 'משפחתי'
+                                  : 'אישי';
+                              return ListTile(
+                                leading: const Icon(Icons.inventory_2_outlined),
+                                title: Text(t.title),
+                                subtitle: Text('חשיפה: $visLabel'),
+                                trailing: const Icon(Icons.chevron_left),
+                                onTap: () async {
+                                  await _assignBankTaskToMember(
+                                    sheetContext,
+                                    bankTask: t,
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -812,280 +468,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openAddBankTaskDialog(BuildContext context) async {
-    final titleController = TextEditingController();
-    final textDescriptionController = TextEditingController();
-    TaskVisibility visibility = TaskVisibility.family;
-    TaskType type = TaskType.text;
-    
-    final shoppingControllers = <TextEditingController>[];
-    final newItemController = TextEditingController();
-    
-    String? titleError;
-    String? descError;
-
-    void processPastedItems(StateSetter setModalState) {
-      final text = newItemController.text;
-      if (text.trim().isEmpty) return;
-      final lines = text.split('\n');
-      
-      setModalState(() {
-        for (final line in lines) {
-          final trimmed = line.trim();
-          if (trimmed.isEmpty) continue;
-          
-          final exists = shoppingControllers.any(
-            (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase()
-          );
-          
-          if (!exists) {
-            shoppingControllers.add(TextEditingController(text: trimmed));
-          }
-        }
-        newItemController.clear();
-        descError = null;
-      });
-    }
-
-    Map<String, dynamic> buildDescriptionJson() {
-      return switch (type) {
-        TaskType.text => TaskDescription.text(
-            textDescriptionController.text.trim(),
-          ).toJson(),
-        TaskType.shopping => TaskDescription.shopping(
-            shoppingControllers
-                .map((c) => c.text.trim())
-                .where((t) => t.isNotEmpty)
-                .map((name) => <String, dynamic>{'name': name, 'done': false})
-                .toList(),
-          ).toJson(),
-      };
-    }
-
-    bool validate(StateSetter setModalState) {
-      if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
-        processPastedItems(setModalState);
-      }
-
-      final title = titleController.text.trim();
-      final descText = textDescriptionController.text.trim();
-      final shoppingItems = shoppingControllers
-          .map((c) => c.text.trim())
-          .where((t) => t.isNotEmpty)
-          .toList();
-
-      String? newTitleError;
-      String? newDescError;
-
-      if (title.isEmpty) newTitleError = 'נא להזין כותרת למשימה';
-
-      if (type == TaskType.text) {
-        if (descText.isEmpty) newDescError = 'נא להזין תיאור';
-      } else {
-        if (shoppingItems.isEmpty) newDescError = 'נא להוסיף לפחות פריט אחד';
-      }
-
-      setModalState(() {
-        titleError = newTitleError;
-        descError = newDescError;
-      });
-
-      return newTitleError == null && newDescError == null;
-    }
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Directionality(
-              textDirection: TextDirection.rtl,
-              child: AlertDialog(
-                title: const Text('הוספת משימה לבנק'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: titleController,
-                        textDirection: TextDirection.rtl,
-                        decoration: InputDecoration(
-                          labelText: 'כותרת משימה',
-                          border: const OutlineInputBorder(),
-                          errorText: titleError,
-                        ),
-                        onChanged: (_) {
-                          if (titleError == null) return;
-                          setModalState(() => titleError = null);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<TaskVisibility>(
-                        initialValue: visibility,
-                        decoration: const InputDecoration(
-                          labelText: 'חשיפה',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: TaskVisibility.family,
-                            child: Text('משפחתי'),
-                          ),
-                          DropdownMenuItem(
-                            value: TaskVisibility.private,
-                            child: Text('אישי'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setModalState(() => visibility = value);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      SegmentedButton<TaskType>(
-                        segments: const [
-                          ButtonSegment(
-                            value: TaskType.text,
-                            label: Text('טקסט חופשי'),
-                          ),
-                          ButtonSegment(
-                            value: TaskType.shopping,
-                            label: Text('רשימת קניות'),
-                          ),
-                        ],
-                        selected: {type},
-                        onSelectionChanged: (s) {
-                          setModalState(() {
-                            type = s.first;
-                            descError = null;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      if (type == TaskType.text)
-                        TextField(
-                          controller: textDescriptionController,
-                          textDirection: TextDirection.rtl,
-                          minLines: 3,
-                          maxLines: 6,
-                          decoration: InputDecoration(
-                            labelText: 'תיאור',
-                            border: const OutlineInputBorder(),
-                            errorText: descError,
-                          ),
-                          onChanged: (_) {
-                            if (descError == null) return;
-                            setModalState(() => descError = null);
-                          },
-                        )
-                      else
-                        InputDecorator(
-                          decoration: InputDecoration(
-                            labelText: 'פריטים',
-                            border: const OutlineInputBorder(),
-                            errorText: descError,
-                          ),
-                          child: Column(
-                            children: [
-                              for (var i = 0; i < shoppingControllers.length; i++)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: shoppingControllers[i],
-                                          textDirection: TextDirection.rtl,
-                                          decoration: const InputDecoration(
-                                            isDense: true,
-                                            border: OutlineInputBorder(),
-                                          ),
-                                          onChanged: (_) {
-                                            if (descError == null) return;
-                                            setModalState(() => descError = null);
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        onPressed: () {
-                                          setModalState(() {
-                                            shoppingControllers.removeAt(i);
-                                          });
-                                        },
-                                        icon: const Icon(Icons.remove_circle_outline),
-                                        color: Theme.of(context).colorScheme.error,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: newItemController,
-                                      textDirection: TextDirection.rtl,
-                                      minLines: 1,
-                                      maxLines: 5,
-                                      keyboardType: TextInputType.multiline,
-                                      decoration: const InputDecoration(
-                                        hintText: 'הוסף פריט או הדבק רשימה...',
-                                        isDense: true,
-                                        border: OutlineInputBorder(),
-                                      ),
-                                      onChanged: (_) {
-                                        if (descError == null) return;
-                                        setModalState(() => descError = null);
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    onPressed: () => processPastedItems(setModalState),
-                                    icon: const Icon(Icons.add_circle),
-                                    color: Theme.of(context).colorScheme.primary,
-                                    iconSize: 32,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('ביטול'),
-                  ),
-                  FilledButton(
-                    onPressed: () async {
-                      if (!validate(setModalState)) return;
-                      try {
-                        await _supabase.from('task_bank').insert({
-                          'title': titleController.text.trim(),
-                          'visibility':
-                              visibility == TaskVisibility.family ? 'family' : 'private',
-                          'description': buildDescriptionJson(),
-                        });
-                      } catch (e) {
-                        if (!dialogContext.mounted) return;
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(content: Text('שגיאה בהוספה לבנק: $e')),
-                        );
-                        return;
-                      }
-                      if (!dialogContext.mounted) return;
-                      Navigator.pop(dialogContext);
-                    },
-                    child: const Text('הוסף'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+        return const _AddBankTaskDialog();
       },
     );
   }
@@ -1237,14 +623,12 @@ class _HomeScreenState extends State<HomeScreen> {
           final allTasks = snapshot.data ?? const <Task>[];
           final visibleTasks = allTasks.where((t) {
             if (t.visibility == TaskVisibility.family) return true;
-            // Private tasks are only visible to the assignee (current user).
             return t.assignee == currentUser;
           }).toList();
 
           final weeklyCounts = _weeklyFamilyCompletedCounts(visibleTasks);
           final trophyWinner = _trophyWinner(weeklyCounts);
 
-          // === לוגיקת לוח הבקרה האישי ===
           final cutoff = _mostRecentSaturdayAt2359(DateTime.now());
           int personalTotalThisWeek = 0;
           int personalCompletedThisWeek = 0;
@@ -1265,7 +649,6 @@ class _HomeScreenState extends State<HomeScreen> {
           double personalProgress = personalTotalThisWeek == 0 
               ? 0 
               : personalCompletedThisWeek / personalTotalThisWeek;
-          // ================================
 
           final byAssignee = <String, List<Task>>{
             for (final m in _members) m: <Task>[],
@@ -1278,7 +661,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return Column(
             children: [
-              // === כרטיסיית מאזן אישי שבועי ===
               Card(
                 color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -1307,9 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              // ==================================
 
-              // רשימת בני המשפחה
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(top: 8, bottom: 24),
@@ -1371,7 +751,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         subtitle: Text(
-                          'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע : ${weeklyCounts[member] ?? 0}',
+                          'משימות פתוחות: ${(byAssignee[member] ?? const <Task>[]).length} | הושלמו השבוע: ${weeklyCounts[member] ?? 0}',
                         ),
                         children: [
                           Padding(
@@ -1539,8 +919,7 @@ class _TaskTileState extends State<_TaskTile> {
       if (mounted) setState(() => _saving = false);
     }
   }
-  
-  // פונקציית המחיקה החדשה (Hard Delete)
+
   Future<void> _deleteTask() async {
     try {
       await Supabase.instance.client
@@ -1555,7 +934,6 @@ class _TaskTileState extends State<_TaskTile> {
     }
   }
 
-  // חלון האישור לפני מחיקה
   void _showDeleteConfirmation() {
     showDialog(
       context: context,
@@ -1571,8 +949,8 @@ class _TaskTileState extends State<_TaskTile> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext); // סגירת חלון האישור
-                _deleteTask(); // קריאה למחיקה בפועל
+                Navigator.pop(dialogContext);
+                _deleteTask();
               },
               child: const Text('מחק', style: TextStyle(color: Colors.red)),
             ),
@@ -1659,14 +1037,12 @@ class _TaskTileState extends State<_TaskTile> {
             color: Colors.grey,
           ),
           const SizedBox(width: 4),
-          // עטפנו את הטקסט ב-Expanded כדי לדחוף את הפח לצד שמאל
           Expanded(
             child: Text(
               t.visibility == TaskVisibility.family ? 'משפחתי' : 'אישי',
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ),
-          // כפתור המחיקה החדש
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
             padding: EdgeInsets.zero,
@@ -1746,5 +1122,696 @@ class _TaskDescriptionView extends StatelessWidget {
           ],
         ),
     };
+  }
+}
+
+// ========================================================
+// ווידג'ט עצמאי להוספת משימה 
+// ========================================================
+class _AddTaskSheet extends StatefulWidget {
+  final String currentUser;
+  final List<String> members;
+
+  const _AddTaskSheet({required this.currentUser, required this.members});
+
+  @override
+  State<_AddTaskSheet> createState() => _AddTaskSheetState();
+}
+
+class _AddTaskSheetState extends State<_AddTaskSheet> {
+  late final TextEditingController titleController;
+  late final TextEditingController textDescriptionController;
+  late final TextEditingController newItemController;
+  final List<TextEditingController> shoppingControllers = [];
+
+  late String selectedMember;
+  TaskVisibility visibility = TaskVisibility.private;
+  TaskType type = TaskType.text;
+
+  String? titleError;
+  String? descError;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController();
+    textDescriptionController = TextEditingController();
+    newItemController = TextEditingController();
+    selectedMember = widget.currentUser;
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    textDescriptionController.dispose();
+    newItemController.dispose();
+    for (final c in shoppingControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void processPastedItems() {
+    final text = newItemController.text;
+    if (text.trim().isEmpty) return;
+    final lines = text.split('\n');
+
+    setState(() {
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        final exists = shoppingControllers.any(
+            (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase());
+
+        if (!exists) {
+          shoppingControllers.add(TextEditingController(text: trimmed));
+        }
+      }
+      newItemController.clear();
+      descError = null;
+    });
+  }
+
+  Map<String, dynamic> buildDescriptionJson() {
+    return switch (type) {
+      TaskType.text => TaskDescription.text(
+          textDescriptionController.text.trim(),
+        ).toJson(),
+      TaskType.shopping => TaskDescription.shopping(
+          shoppingControllers
+              .map((c) => c.text.trim())
+              .where((t) => t.isNotEmpty)
+              .map((name) => <String, dynamic>{'name': name, 'done': false})
+              .toList(),
+        ).toJson(),
+    };
+  }
+
+  bool validate() {
+    if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
+      processPastedItems();
+    }
+
+    final title = titleController.text.trim();
+    final descText = textDescriptionController.text.trim();
+    final shoppingItems = shoppingControllers
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    String? newTitleError;
+    String? newDescError;
+
+    if (title.isEmpty) newTitleError = 'נא להזין כותרת למשימה';
+
+    if (type == TaskType.text) {
+      if (descText.isEmpty) newDescError = 'נא להזין תיאור';
+    } else {
+      if (shoppingItems.isEmpty) newDescError = 'נא להוסיף לפחות פריט אחד';
+    }
+
+    setState(() {
+      titleError = newTitleError;
+      descError = newDescError;
+    });
+
+    return newTitleError == null && newDescError == null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      // קיבוע הגובה ל-90% מונע את הקפיצות של החלון כשהמקלדת נסגרת!
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.9,
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 8,
+              bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'הוספת משימה חדשה',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                    textAlign: TextAlign.start,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleController,
+                    textDirection: TextDirection.rtl,
+                    decoration: InputDecoration(
+                      labelText: 'כותרת משימה',
+                      hintText: 'לדוגמה: להוציא את הזבל',
+                      prefixIcon: const Icon(Icons.task_alt_outlined),
+                      border: const OutlineInputBorder(),
+                      errorText: titleError,
+                    ),
+                    autofocus: true,
+                    onChanged: (_) {
+                      if (titleError == null) return;
+                      setState(() => titleError = null);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedMember,
+                    decoration: const InputDecoration(
+                      labelText: 'למי לשייך?',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: (visibility == TaskVisibility.private
+                            ? <String>[widget.currentUser]
+                            : widget.members)
+                        .map(
+                          (m) => DropdownMenuItem<String>(
+                            value: m,
+                            child: Text(m, textDirection: TextDirection.rtl),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: visibility == TaskVisibility.private
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            setState(() => selectedMember = value);
+                          },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<TaskVisibility>(
+                    value: visibility,
+                    decoration: const InputDecoration(
+                      labelText: 'חשיפה',
+                      prefixIcon: Icon(Icons.visibility_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: TaskVisibility.family,
+                        child: Text('משפחתי'),
+                      ),
+                      DropdownMenuItem(
+                        value: TaskVisibility.private,
+                        child: Text('אישי'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        visibility = value;
+                        if (visibility == TaskVisibility.private) {
+                          selectedMember = widget.currentUser;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<TaskType>(
+                    segments: const [
+                      ButtonSegment(
+                        value: TaskType.text,
+                        label: Text('טקסט חופשי'),
+                        icon: Icon(Icons.text_snippet_outlined),
+                      ),
+                      ButtonSegment(
+                        value: TaskType.shopping,
+                        label: Text('רשימת קניות'),
+                        icon: Icon(Icons.shopping_cart_outlined),
+                      ),
+                    ],
+                    selected: {type},
+                    onSelectionChanged: (s) {
+                      setState(() {
+                        type = s.first;
+                        descError = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (type == TaskType.text)
+                    TextField(
+                      controller: textDescriptionController,
+                      textDirection: TextDirection.rtl,
+                      minLines: 3,
+                      maxLines: 6,
+                      decoration: InputDecoration(
+                        labelText: 'תיאור',
+                        hintText: 'מה צריך לעשות?',
+                        prefixIcon: const Icon(Icons.description_outlined),
+                        border: const OutlineInputBorder(),
+                        errorText: descError,
+                      ),
+                      onChanged: (_) {
+                        if (descError == null) return;
+                        setState(() => descError = null);
+                      },
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'פריטים',
+                            border: const OutlineInputBorder(),
+                            errorText: descError,
+                          ),
+                          child: Column(
+                            children: [
+                              for (var i = 0; i < shoppingControllers.length; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: shoppingControllers[i],
+                                          textDirection: TextDirection.rtl,
+                                          decoration: const InputDecoration(
+                                            isDense: true,
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onChanged: (_) {
+                                            if (descError == null) return;
+                                            setState(() => descError = null);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            shoppingControllers.removeAt(i);
+                                          });
+                                        },
+                                        icon: const Icon(Icons.remove_circle_outline),
+                                        color: Theme.of(context).colorScheme.error,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: newItemController,
+                                      textDirection: TextDirection.rtl,
+                                      minLines: 1,
+                                      maxLines: 5,
+                                      keyboardType: TextInputType.multiline,
+                                      decoration: const InputDecoration(
+                                        hintText: 'הוסף פריט או הדבק רשימה...',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      onChanged: (_) {
+                                        if (descError == null) return;
+                                        setState(() => descError = null);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: processPastedItems,
+                                    icon: const Icon(Icons.add_circle),
+                                    color: Theme.of(context).colorScheme.primary,
+                                    iconSize: 32,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('ביטול'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () async {
+                            if (!validate()) return;
+
+                            final title = titleController.text.trim();
+                            final description = buildDescriptionJson();
+
+                            try {
+                              await Supabase.instance.client.from('tasks').insert({
+                                'title': title,
+                                'assignee': selectedMember,
+                                'visibility': visibility == TaskVisibility.family
+                                    ? 'family'
+                                    : 'private',
+                                'description': description,
+                                'is_completed': false,
+                                'completed_at': null,
+                              });
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('שגיאה בהוספת משימה: $e'),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                          },
+                          child: const Text('הוסף משימה'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ========================================================
+// ווידג'ט עצמאי להוספת משימה לבנק 
+// ========================================================
+class _AddBankTaskDialog extends StatefulWidget {
+  const _AddBankTaskDialog();
+
+  @override
+  State<_AddBankTaskDialog> createState() => _AddBankTaskDialogState();
+}
+
+class _AddBankTaskDialogState extends State<_AddBankTaskDialog> {
+  late final TextEditingController titleController;
+  late final TextEditingController textDescriptionController;
+  late final TextEditingController newItemController;
+  final List<TextEditingController> shoppingControllers = [];
+
+  TaskVisibility visibility = TaskVisibility.family;
+  TaskType type = TaskType.text;
+
+  String? titleError;
+  String? descError;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController();
+    textDescriptionController = TextEditingController();
+    newItemController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    textDescriptionController.dispose();
+    newItemController.dispose();
+    for (final c in shoppingControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void processPastedItems() {
+    final text = newItemController.text;
+    if (text.trim().isEmpty) return;
+    final lines = text.split('\n');
+
+    setState(() {
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        final exists = shoppingControllers.any(
+            (c) => c.text.trim().toLowerCase() == trimmed.toLowerCase());
+
+        if (!exists) {
+          shoppingControllers.add(TextEditingController(text: trimmed));
+        }
+      }
+      newItemController.clear();
+      descError = null;
+    });
+  }
+
+  Map<String, dynamic> buildDescriptionJson() {
+    return switch (type) {
+      TaskType.text => TaskDescription.text(
+          textDescriptionController.text.trim(),
+        ).toJson(),
+      TaskType.shopping => TaskDescription.shopping(
+          shoppingControllers
+              .map((c) => c.text.trim())
+              .where((t) => t.isNotEmpty)
+              .map((name) => <String, dynamic>{'name': name, 'done': false})
+              .toList(),
+        ).toJson(),
+    };
+  }
+
+  bool validate() {
+    if (type == TaskType.shopping && newItemController.text.trim().isNotEmpty) {
+      processPastedItems();
+    }
+
+    final title = titleController.text.trim();
+    final descText = textDescriptionController.text.trim();
+    final shoppingItems = shoppingControllers
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    String? newTitleError;
+    String? newDescError;
+
+    if (title.isEmpty) newTitleError = 'נא להזין כותרת למשימה';
+
+    if (type == TaskType.text) {
+      if (descText.isEmpty) newDescError = 'נא להזין תיאור';
+    } else {
+      if (shoppingItems.isEmpty) newDescError = 'נא להוסיף לפחות פריט אחד';
+    }
+
+    setState(() {
+      titleError = newTitleError;
+      descError = newDescError;
+    });
+
+    return newTitleError == null && newDescError == null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        title: const Text('הוספת משימה לבנק'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                textDirection: TextDirection.rtl,
+                decoration: InputDecoration(
+                  labelText: 'כותרת משימה',
+                  border: const OutlineInputBorder(),
+                  errorText: titleError,
+                ),
+                onChanged: (_) {
+                  if (titleError == null) return;
+                  setState(() => titleError = null);
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<TaskVisibility>(
+                value: visibility,
+                decoration: const InputDecoration(
+                  labelText: 'חשיפה',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: TaskVisibility.family,
+                    child: Text('משפחתי'),
+                  ),
+                  DropdownMenuItem(
+                    value: TaskVisibility.private,
+                    child: Text('אישי'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => visibility = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<TaskType>(
+                segments: const [
+                  ButtonSegment(
+                    value: TaskType.text,
+                    label: Text('טקסט חופשי'),
+                  ),
+                  ButtonSegment(
+                    value: TaskType.shopping,
+                    label: Text('רשימת קניות'),
+                  ),
+                ],
+                selected: {type},
+                onSelectionChanged: (s) {
+                  setState(() {
+                    type = s.first;
+                    descError = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              if (type == TaskType.text)
+                TextField(
+                  controller: textDescriptionController,
+                  textDirection: TextDirection.rtl,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: InputDecoration(
+                    labelText: 'תיאור',
+                    border: const OutlineInputBorder(),
+                    errorText: descError,
+                  ),
+                  onChanged: (_) {
+                    if (descError == null) return;
+                    setState(() => descError = null);
+                  },
+                )
+              else
+                InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'פריטים',
+                    border: const OutlineInputBorder(),
+                    errorText: descError,
+                  ),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < shoppingControllers.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: shoppingControllers[i],
+                                  textDirection: TextDirection.rtl,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  onChanged: (_) {
+                                    if (descError == null) return;
+                                    setState(() => descError = null);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    shoppingControllers.removeAt(i);
+                                  });
+                                },
+                                icon: const Icon(Icons.remove_circle_outline),
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ],
+                          ),
+                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: newItemController,
+                              textDirection: TextDirection.rtl,
+                              minLines: 1,
+                              maxLines: 5,
+                              keyboardType: TextInputType.multiline,
+                              decoration: const InputDecoration(
+                                hintText: 'הוסף פריט או הדבק רשימה...',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) {
+                                if (descError == null) return;
+                                setState(() => descError = null);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: processPastedItems,
+                            icon: const Icon(Icons.add_circle),
+                            color: Theme.of(context).colorScheme.primary,
+                            iconSize: 32,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('ביטול'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!validate()) return;
+              try {
+                await Supabase.instance.client.from('task_bank').insert({
+                  'title': titleController.text.trim(),
+                  'visibility': visibility == TaskVisibility.family
+                      ? 'family'
+                      : 'private',
+                  'description': buildDescriptionJson(),
+                });
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('שגיאה בהוספה לבנק: $e')),
+                );
+                return;
+              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+            },
+            child: const Text('הוסף'),
+          ),
+        ],
+      ),
+    );
   }
 }
