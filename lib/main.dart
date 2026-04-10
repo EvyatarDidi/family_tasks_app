@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+// הגדרת משתנה הסביבה שיקבל את חתימת הזמן בזמן הקימפול
+const String buildTime = String.fromEnvironment('BUILD_TIME', defaultValue: 'Unknown');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -291,6 +295,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // פונקציה להצגת דיאלוג "אודות" עם פרטי הגרסה וחתימת הזמן
+  Future<void> _showAboutDialog() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('אודות האפליקציה'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('שם: ${packageInfo.appName}'),
+                Text('גרסה בסיסית: ${packageInfo.version}'),
+                Text('קוד גרסה: ${packageInfo.buildNumber}'),
+                const SizedBox(height: 16),
+                const Text('זמן קימפול (Build Time):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(buildTime, style: const TextStyle(color: Colors.blueGrey)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('סגור'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Stream<List<Task>> _tasksStream() {
     return _supabase
         .from('tasks')
@@ -369,7 +410,6 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (sheetContext) {
         return Directionality(
           textDirection: TextDirection.rtl,
-          // קיבוע הגובה ל-90% כדי שהחלון לא יקפוץ
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.9,
             child: SafeArea(
@@ -420,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Center(child: CircularProgressIndicator()),
                           );
                         }
-  
+
                         final items = snapshot.data ?? const <BankTask>[];
                         if (items.isEmpty) {
                           return const ListTile(
@@ -428,7 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             title: Text('אין משימות בבנק עדיין'),
                           );
                         }
-  
+
                         return Expanded(
                           child: ListView.separated(
                             shrinkWrap: true,
@@ -569,6 +609,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Family Task Manager'),
         actions: [
+          // כפתור המידע החדש ב-AppBar
+          IconButton(
+            tooltip: 'אודות',
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showAboutDialog,
+          ),
           if (currentUser != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1125,9 +1171,6 @@ class _TaskDescriptionView extends StatelessWidget {
   }
 }
 
-// ========================================================
-// ווידג'ט עצמאי להוספת משימה 
-// ========================================================
 class _AddTaskSheet extends StatefulWidget {
   final String currentUser;
   final List<String> members;
@@ -1243,7 +1286,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
-      // קיבוע הגובה ל-90% מונע את הקפיצות של החלון כשהמקלדת נסגרת!
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.9,
         child: SafeArea(
@@ -1514,9 +1556,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   }
 }
 
-// ========================================================
-// ווידג'ט עצמאי להוספת משימה לבנק 
-// ========================================================
 class _AddBankTaskDialog extends StatefulWidget {
   const _AddBankTaskDialog();
 
